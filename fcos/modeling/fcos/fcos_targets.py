@@ -70,10 +70,10 @@ def get_points(features, fpn_strides):
 
 def get_points_single(featmap_size, stride, device):
     """point prediction per feature-level.
-
+    # Fanchen: stride should be int
     Args:
         featmap_size (Tuple): feature map size (Hi, Wi) where 'i' denotes specific feature level.
-        stride (list[int]): feature map stride corresponding to each feature level 'i'.
+        stride (int): feature map stride corresponding to each feature level 'i'.
         device: the same device type with feature map tensor.
 
     Returns:
@@ -82,7 +82,29 @@ def get_points_single(featmap_size, stride, device):
     """
 
     """ your code starts here """
-    points = None
+
+    # Fanchen: Example of meshgrid
+    # >>> x = torch.tensor([1, 2, 3])
+    # >>> y = torch.tensor([4, 5, 6])
+    # >>> grid_x, grid_y = torch.meshgrid(x, y)
+    # >>> grid_x
+    # tensor([[1, 1, 1],
+    #         [2, 2, 2],
+    #         [3, 3, 3]])
+    # >>> grid_y
+    # tensor([[4, 5, 6],
+    #         [4, 5, 6],
+    #         [4, 5, 6]])
+
+    h, w = featmap_size
+    x = torch.arange(0, w * stride, step=stride, dtype=torch.float32, device=device)
+    y = torch.arange(0, h * stride, step=stride, dtype=torch.float32, device=device)
+    # Fanchen: x = [0, s, 2s,..., (w-1) * s], y = [0, s, 2s,..., (h-1) * s]
+    grid_y, grid_x = torch.meshgrid(y, x)
+    # Fanchen: grid_x = [[0, s, 2s,..., (w-1) * s] * h]
+    # grid_y = [[0 * w], [s * w], [2s * w],...,[{(h-1) * s} * w]]
+    points = torch.stack((grid_x.reshape(-1), grid_y.reshape(-1)), dim=1) + stride // 2
+    # points.shape -> torch.Size([35, 2]) (when w = 5, h = 7)
     """ your code ends here """
     return points
 
