@@ -8,11 +8,11 @@ INF = 100000000
 
 def FCOSTargets(all_level_points, gt_instances, cfg):
     # fmt: off
-    num_classes           = cfg.MODEL.FCOS.NUM_CLASSES
-    fpn_strides           = cfg.MODEL.FCOS.FPN_STRIDES
-    sizes_of_interest     = cfg.MODEL.FCOS.SIZES_OF_INTEREST
-    center_sample         = cfg.MODEL.FCOS.CENTER_SAMPLE
-    center_radius         = cfg.MODEL.FCOS.POS_RADIUS
+    num_classes = cfg.MODEL.FCOS.NUM_CLASSES
+    fpn_strides = cfg.MODEL.FCOS.FPN_STRIDES
+    sizes_of_interest = cfg.MODEL.FCOS.SIZES_OF_INTEREST
+    center_sample = cfg.MODEL.FCOS.CENTER_SAMPLE
+    center_radius = cfg.MODEL.FCOS.POS_RADIUS
     normalize_reg_targets = cfg.MODEL.FCOS.NORMALIZE_REG_TARGETS
     # fmt: on
 
@@ -110,13 +110,13 @@ def get_points_single(featmap_size, stride, device):
 
 
 def fcos_target(
-    points,
-    regress_ranges,
-    gt_instance_list,
-    fpn_strides,
-    center_sample_cfg,
-    normalize_reg_targets,
-    num_classes=80
+        points,
+        regress_ranges,
+        gt_instance_list,
+        fpn_strides,
+        center_sample_cfg,
+        normalize_reg_targets,
+        num_classes=80
 ):
     """Compute class labels and regression targets for every feature points on all feature levels.
 
@@ -197,14 +197,14 @@ def fcos_target(
 
 
 def fcos_target_single_image(
-    gt_instances,
-    points,
-    regress_ranges,
-    num_points_per_level,
-    fpn_strides,
-    center_sample_cfg,
-    normalize_reg_targets,
-    num_classes=80
+        gt_instances,
+        points,
+        regress_ranges,
+        num_points_per_level,
+        fpn_strides,
+        center_sample_cfg,
+        normalize_reg_targets,
+        num_classes=80
 ):
     """Compute class labels and regression targets for single image.
 
@@ -310,7 +310,7 @@ def fcos_target_single_image(
         inside_gt_bbox_mask = NotImplemented
 
     # condition2: limit the regression range for each location
-    max_regress_distance = NotImplemented   # hint: use :func:`torch.max`.
+    max_regress_distance = NotImplemented  # hint: use :func:`torch.max`.
 
     # The mask whether `max_regress_distance` on every points is bounded
     #   between the side values regress_ranges.
@@ -318,8 +318,8 @@ def fcos_target_single_image(
     inside_regress_range = (NotImplemented)
 
     # filter areas that violate condition1 and condition2 above.
-    areas[NotImplemented] = INF   # use `inside_gt_bbox_mask`
-    areas[NotImplemented] = INF   # use `inside_regress_range`
+    areas[NotImplemented] = INF  # use `inside_gt_bbox_mask`
+    areas[NotImplemented] = INF  # use `inside_regress_range`
 
     # If there are still more than one objects for a location,
     # we choose the one with minimal area across `num_gts` axis.
@@ -346,7 +346,12 @@ def compute_centerness_targets(pos_bbox_targets):
     """
 
     """ your code starts here """
-    centerness_targets = pos_bbox_targets.new_zeros(pos_bbox_targets.size(0), 1)
+    lr = pos_bbox_targets[:, [0, 2]]
+    tb = pos_bbox_targets[:, [1, 3]]
+    # centerness_targets = pos_bbox_targets.new_zeros(pos_bbox_targets.size(0), 1)
+    # Fanchen: ctrn = sqrt( (min(lr) * min(tb)) / (max(lr) * max(tb)) )
+    centerness_targets = torch.sqrt(
+        (lr.min(dim=1).values * tb.min(dim=1).values) / (lr.max(dim=1).values * tb.max(dim=1).values))
     """ your code ends here """
 
     return centerness_targets
