@@ -36,16 +36,16 @@ class FCOS(nn.Module):
     def __init__(self, cfg, input_shape: Dict[str, ShapeSpec]):
         super().__init__()
         # fmt: off
-        self.mask_on               = cfg.MODEL.MASK_ON
-        self.num_classes           = cfg.MODEL.FCOS.NUM_CLASSES
-        self.in_features           = cfg.MODEL.FCOS.IN_FEATURES
-        self.fpn_strides           = cfg.MODEL.FCOS.FPN_STRIDES
+        self.mask_on = cfg.MODEL.MASK_ON
+        self.num_classes = cfg.MODEL.FCOS.NUM_CLASSES
+        self.in_features = cfg.MODEL.FCOS.IN_FEATURES
+        self.fpn_strides = cfg.MODEL.FCOS.FPN_STRIDES
         self.normalize_reg_targets = cfg.MODEL.FCOS.NORMALIZE_REG_TARGETS
         # inference parameters
-        self.score_threshold       = cfg.MODEL.FCOS.SCORE_THRESH_TEST
-        self.nms_pre_topk          = cfg.MODEL.FCOS.NMS_PRE_TOPK
-        self.nms_threshold         = cfg.MODEL.FCOS.NMS_THRESH_TEST
-        self.nms_post_topk         = cfg.MODEL.FCOS.NMS_POST_TOPK
+        self.score_threshold = cfg.MODEL.FCOS.SCORE_THRESH_TEST
+        self.nms_pre_topk = cfg.MODEL.FCOS.NMS_PRE_TOPK
+        self.nms_threshold = cfg.MODEL.FCOS.NMS_THRESH_TEST
+        self.nms_post_topk = cfg.MODEL.FCOS.NMS_POST_TOPK
         # fmt: on
         self.cfg = cfg
         self.fcos_head = FCOSHead(cfg, [input_shape[f] for f in self.in_features])
@@ -97,12 +97,12 @@ class FCOS(nn.Module):
         return proposals, None
 
     def predict_proposals(
-        self,
-        cls_scores,
-        bbox_preds,
-        centernesses,
-        all_level_points,
-        image_sizes
+            self,
+            cls_scores,
+            bbox_preds,
+            centernesses,
+            all_level_points,
+            image_sizes
     ):
         """
         Arguments:
@@ -148,12 +148,12 @@ class FCOS(nn.Module):
         return result_list
 
     def predict_proposals_single_image(
-        self,
-        cls_scores,
-        bbox_preds,
-        centernesses,
-        all_level_points,
-        image_size
+            self,
+            cls_scores,
+            bbox_preds,
+            centernesses,
+            all_level_points,
+            image_size
     ):
         """
         Single-image inference. Return bounding-box detection results by thresholding
@@ -177,7 +177,7 @@ class FCOS(nn.Module):
 
         # Iterate over every feature level
         for (cls_score, bbox_pred, centerness, points) in zip(
-            cls_scores, bbox_preds, centernesses, all_level_points
+                cls_scores, bbox_preds, centernesses, all_level_points
         ):
             assert cls_score.size()[-2:] == bbox_pred.size()[-2:]
             # (C, Hi, Wi) -> (Hi*Wi, C)
