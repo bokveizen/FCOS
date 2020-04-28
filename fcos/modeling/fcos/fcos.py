@@ -46,6 +46,14 @@ class FCOS(nn.Module):
         self.nms_pre_topk = cfg.MODEL.FCOS.NMS_PRE_TOPK
         self.nms_threshold = cfg.MODEL.FCOS.NMS_THRESH_TEST
         self.nms_post_topk = cfg.MODEL.FCOS.NMS_POST_TOPK
+
+        # Fanchen:
+        # # Inference parameters
+        # _C.MODEL.FCOS.SCORE_THRESH_TEST = 0.05
+        # _C.MODEL.FCOS.NMS_THRESH_TEST = 0.6
+        # _C.MODEL.FCOS.NMS_PRE_TOPK = 1000
+        # _C.MODEL.FCOS.NMS_POST_TOPK = 100
+
         # fmt: on
         self.cfg = cfg
         self.fcos_head = FCOSHead(cfg, [input_shape[f] for f in self.in_features])
@@ -73,6 +81,18 @@ class FCOS(nn.Module):
         # Step 1. FCOS head implementation
         fcos_preds = self.fcos_head(features)
         all_level_points = get_points(features, self.fpn_strides)
+
+        # Fanchen: DEBUG
+        # import joblib
+        # for _ in range(10):
+        #     print('DEBUG!!!')
+        # # print(gt_instances[0])
+        # joblib.dump(gt_instances[0], '/home/CtrlDrive/fanchen/pyws/ee898_pa1/gtins.data')
+        # exit(0)
+
+        # Fanchen: An example of gt_instances
+        # Instances(num_instances=2, image_height=800, image_width=1196, fields=[gt_boxes: Boxes(tensor([[ 634.6836,  260.2990, 1120.6893,  791.2336],
+        # [ 716.8525,  441.9065,  739.6699,  470.2243]], device='cuda:3')), gt_classes: tensor([ 0, 67], device='cuda:3')])
 
         if self.training:
             # Step 2. training target generation
@@ -104,6 +124,9 @@ class FCOS(nn.Module):
             all_level_points,
             image_sizes
     ):
+        # Fanchen: DEBUG
+        # for _ in range(20):
+        #     print('predict_proposals @ fcos.py now!!!!!!!!!!')
         """
         Arguments:
             cls_scores, bbox_preds, centernesses: Same as the output of :meth:`FCOSHead.forward`
@@ -187,15 +210,59 @@ class FCOS(nn.Module):
             # (1, Hi, Wi) -> (Hi*Wi, )
             centerness = centerness.permute(1, 2, 0).reshape(-1).sigmoid()
 
+            # Fanchen: DEBUG
+            # torch.save((scores, bbox_pred, centerness), '/home/CtrlDrive/fanchen/pyws/ee898_pa1/p4.data')
+            # exit(-1)
+            # >>> scores, scores.size()
+            # (tensor([[0.0101, 0.0100, 0.0100,  ..., 0.0099, 0.0100, 0.0100],
+            #         [0.0101, 0.0099, 0.0100,  ..., 0.0099, 0.0100, 0.0100],
+            #         [0.0100, 0.0098, 0.0100,  ..., 0.0099, 0.0099, 0.0100],
+            #         ...,
+            #         [0.0097, 0.0100, 0.0100,  ..., 0.0099, 0.0102, 0.0101],
+            #         [0.0098, 0.0099, 0.0101,  ..., 0.0100, 0.0101, 0.0100],
+            #         [0.0099, 0.0099, 0.0101,  ..., 0.0100, 0.0101, 0.0100]],
+            #        device='cuda:4'), torch.Size([12400, 80]))
+            # >>> bbox_pred, bbox_pred.size()
+            # (tensor([[8.0000, 7.9929, 7.9799, 7.9859],
+            #         [8.0176, 7.9548, 7.9995, 8.0126],
+            #         [8.0005, 7.9393, 7.9697, 8.0328],
+            #         ...,
+            #         [8.0280, 7.9602, 7.9753, 7.9950],
+            #         [8.0346, 7.9741, 7.9482, 7.9810],
+            #         [7.9888, 7.9795, 7.9742, 7.9920]], device='cuda:4'), torch.Size([12400, 4]))
+            # >>> centerness, centerness.size()
+            # (tensor([0.5003, 0.5017, 0.5008,  ..., 0.5003, 0.5005, 0.5011], device='cuda:4'), torch.Size([12400]))
             """ Your code starts here """
+            # H, W = image_size
+            scores *= centerness[:, None]
+            scores_i_th_inds = torch.zeros_like(scores) + (scores > self.score_threshold)
+            scores *= scores_i_th_inds
+            topk_cnt = scores_i_th_inds.reshape(-1).sum().clamp(max=self.nms_pre_topk)
 
+            flatten_scores = scores.reshape(-1)  # Fanchen: size is (H*W*C, )
+            flatten_labels = torch.tensor(range(self.num_classes)).\
+                repeat(image_size[0] * image_size[1])  # Fanchen: size is (H*W*C, )
+            flatten_boxes = bbox_pred.unsqueeze(1).\
+                expand(-1, self.num_classes, -1).reshape(-1, 4)  # Fanchen: size is (H*W*C, 4)
+            pred_scores, topk_inds = flatten_scores.topk(int(topk_cnt))
+            pred_scores = torch.sqrt(pred_scores)
+            pred_boxes = Boxes(flatten_boxes[topk_inds])
+            pred_classes = flatten_labels[topk_inds]
+            box_list = Instances(image_size, pred_boxes=pred_boxes, scores=pred_scores, pred_classes=pred_classes)
+            bboxes_list.append(box_list)
+            # Fanchen: tensor (Tensor[float]): a Nx4 matrix.  Each row is (x1, y1, x2, y2).
             """ Your code ends here """
 
         bboxes_list = Instances.cat(bboxes_list)
+        # Fanchen: def cat(instance_lists: List["Instances"]) -> "Instances":
 
         # non-maximum suppression per-image.
         results = ml_nms(
             bboxes_list,
+            # Fanchen:
+            # boxes = boxlist.pred_boxes.tensor
+            # scores = boxlist.scores
+            # labels = boxlist.pred_classes
             self.nms_threshold,
             # Limit to max_per_image detections **over all classes**
             max_proposals=self.nms_post_topk

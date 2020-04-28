@@ -157,6 +157,16 @@ def fcos_target(
     num_points = [center.size(0) for center in points]
 
     # get labels and bbox_targets of each image; per-image computation.
+
+    # Fanchen: def of multi_apply
+    # def multi_apply(func, *args, **kwargs):
+    #     pfunc = partial(func, **kwargs) if kwargs else func
+    #     # Fanchen: partial, pfunc = func w/ **kwargs fixed as **kwargs
+    #     map_results = map(pfunc, *args)  # Fanchen: return the list [pfunc(arg) for arg in *args]
+    #     return tuple(map(list, zip(*map_results)))
+    #     # Fanchen: map_results = [[1,2,3],[4,5,6]]; tuple(map(list, zip(*map_results)))
+    #     # ([1, 4], [2, 5], [3, 6])
+
     labels_list, bbox_targets_list = multi_apply(
         fcos_target_single_image,
         gt_instance_list,
@@ -218,16 +228,25 @@ def fcos_target_single_image(
         bbox_targets (Tensor): regression targets of every feature point in all feature levels
             for a single image. each column corresponds to a tensor shape of (l, t, r, b).
     """
-    center_sample = center_sample_cfg.pop('center_sample', True)
+    center_sample = center_sample_cfg.pop('center_sample', False)
     center_radius = center_sample_cfg.pop('center_radius', 1.5)
 
     # here, num_points accumulates all locations across all feature levels.
-    num_points = points.size(0)
-    num_gts = len(gt_instances)
+    num_points = points.size(0)  # Fanchen: Sum of W*H for all feature levels, len(all sampling positions)
+    num_gts = len(gt_instances)  # Fanchen: The # of bboxes in the img
+
+    # Fanchen: An example of gt_instances (gt_instaces[0]) Instances(num_instances=2, image_height=800,
+    # image_width=1196, fields=[gt_boxes: Boxes(tensor([[ 634.6836,  260.2990, 1120.6893,  791.2336], [ 716.8525,
+    # 441.9065,  739.6699,  470.2243]], device='cuda:3')), gt_classes: tensor([ 0, 67], device='cuda:3')])
+
+    # Fanchen: Boxes --> detectron2.structures.boxes
+    # Fanchen: DEBUG
+    # torch.save(gt_instances, '/home/CtrlDrive/fanchen/pyws/ee898_pa1/gt_inst.data')
+    # exit(-1)
 
     # get class labels and bboxes from `gt_instances`.
-    gt_labels = NotImplemented
-    gt_bboxes = NotImplemented
+    gt_labels = gt_instances.gt_classes
+    gt_bboxes = gt_instances.gt_boxes
 
     if num_gts == 0:
         return (
@@ -236,30 +255,56 @@ def fcos_target_single_image(
         )
 
     # `areas`: should be `torch.Tensor` shape of (num_points, num_gts, 1)
-    areas = NotImplemented  # 1. `torch.Tensor` shape of (num_gts, 1)
-    areas = NotImplemented  # 2. hint: use :func:`torch.repeat`.
+
+    # Fanchen: TEST
+    # num_gts, num_points = 5, 2
+    # areas = torch.zeros(num_gts, 1)  # 1. `torch.Tensor` shape of (num_gts, 1)
+    # areas = areas[None].repeat(num_points, 1, 1)  # 2. hint: use :func:`torch.repeat`.
+    # areas.size() -> torch.Size([2, 5, 1])
+
+    areas = gt_bboxes.area().view(-1, 1)  # 1. `torch.Tensor` shape of (num_gts, 1)
+    areas = areas[None].repeat(num_points, 1, 1)  # 2. hint: use :func:`torch.repeat`.
+    # Fanchen: vals, indices = areas.min(dim=1)
+
+    # Fanchen: DEBUG
+    # print(regress_ranges.size(), num_points, num_gts)
+    # exit(0)
+    # torch.Size([22400, 2]) 22400 11
+    # torch.Size([20267, 2]) 20267 1
+    # torch.Size([20267, 2]) 20267 13
+    # torch.Size([20267, 2]) 20267 16
 
     # `regress_ranges`: should be `torch.Tensor` shape of (num_points, num_gts, 2)
-    regress_ranges = NotImplemented  # hint: use :func:`torch.expand`.
+    regress_ranges = cat([r.expand(num_gts, 2) for r in regress_ranges]).view(num_points, num_gts, 2)
+    # hint: use :func:`torch.expand`.
 
     # `gt_bboxes`: should be `torch.Tensor` shape of (num_points, num_gts, 4)
-    gt_bboxes = NotImplemented  # hint: use :func:`torch.expand`.
+    # Fanchen: gt_bboxes.tensor.size() -> [num_gts, 4]
+    gt_bboxes = gt_bboxes.tensor.expand(num_points, num_gts, 4)  # hint: use :func:`torch.expand`.
 
     # align each coordinate  component xs, ys in shape as (num_points, num_gts)
-    xs, ys = points[:, 0], points[:, 1]
-    xs = NotImplemented  # hint: use :func:`torch.expand`.
-    ys = NotImplemented  # hint: use :func:`torch.expand`.
+    xs, ys = points[:, 0], points[:, 1]  # Fanchen: xs.size(), ys.size() -> [num_points, ]
+    xs = xs.view(-1, 1).expand(num_points, num_gts)  # hint: use :func:`torch.expand`.
+    ys = ys.view(-1, 1).expand(num_points, num_gts)  # hint: use :func:`torch.expand`.
+
+    # Fanchen: DEBUG
+    # torch.save((xs, ys, gt_bboxes), '/home/CtrlDrive/fanchen/pyws/ee898_pa1/tt.data')
+    # exit(0)
+    # >>> xs.size(), ys.size(), bbs.size()
+    # (torch.Size([18134, 3]), torch.Size([18134, 3]), torch.Size([18134, 3, 4]))
 
     # distances to each four side of gt bboxes.
     # The equations correspond to equation(1) from FCOS paper.
-    left = NotImplemented
-    right = NotImplemented
-    top = NotImplemented
-    bottom = NotImplemented
-    bbox_targets = torch.stack((left, top, right, bottom), -1)
+    left = xs[:, :] - gt_bboxes[:, :, 0]
+    right = gt_bboxes[:, :, 2] - xs[:, :]
+    top = ys[:, :] - gt_bboxes[:, :, 1]
+    bottom = gt_bboxes[:, :, 3] - ys[:, :]
+    # Fanchen: lrtb.size() -> (num_points, num_gts)
+    bbox_targets = torch.stack((left, top, right, bottom), -1)  # Fanchen: w/ size [num_points, num_gts, 4]
 
     if center_sample:
-        # This codeblock corresponds to extra credits. Note that `Not mendatory`.
+        # Fanchen: TODO: to do later as it's not mandatory
+        # This codeblock corresponds to extra credits. Note that `Not mandatory`.
         # condition1: inside a `center bbox`
         radius = center_radius
         center_xs = NotImplemented  # center x-coordinates of gt_bboxes
@@ -307,29 +352,104 @@ def fcos_target_single_image(
     else:
         # condition1: a point should be inside a gt bbox
         # hint: all distances (l, t, r, b) > 0. use :func:`torch.min`.
-        inside_gt_bbox_mask = NotImplemented
+        inside_gt_bbox_mask = bbox_targets.min(dim=-1)[0] > 0
 
     # condition2: limit the regression range for each location
-    max_regress_distance = NotImplemented  # hint: use :func:`torch.max`.
+    max_regress_distance = bbox_targets.max(dim=-1)[0]  # hint: use :func:`torch.max`.
+    # Fanchen: torch.Size([18134, 3]) (num_points, num_gts)
 
     # The mask whether `max_regress_distance` on every points is bounded
     #   between the side values regress_ranges.
     # See section 3.2 3rd paragraph on FCOS paper.
-    inside_regress_range = (NotImplemented)
+    inside_regress_range = (max_regress_distance >= regress_ranges[:, :, 0]) & \
+                           (max_regress_distance <= regress_ranges[:, :, 1])
 
     # filter areas that violate condition1 and condition2 above.
-    areas[NotImplemented] = INF  # use `inside_gt_bbox_mask`
-    areas[NotImplemented] = INF  # use `inside_regress_range`
+
+    # Fanchen:
+    # >>> temp = torch.tensor([1,2,3])
+    # >>> bool = torch.tensor([True, False, True])
+    # >>> temp[bool==0]=-1
+    # >>> temp
+    # tensor([ 1, -1,  3])
+    # torch.save(areas, '/home/CtrlDrive/fanchen/pyws/ee898_pa1/areas.data')
+    # exit(0)
+
+    areas[inside_gt_bbox_mask == 0] = INF  # use `inside_gt_bbox_mask`
+    areas[inside_regress_range == 0] = INF  # use `inside_regress_range`
 
     # If there are still more than one objects for a location,
     # we choose the one with minimal area across `num_gts` axis.
     # Hint: use :func:`torch.min`.
-    min_area, min_area_inds = NotImplemented
+    min_area, min_area_inds = areas.min(dim=1)
 
     # ground-truth assignments w.r.t. bbox area indices
     labels = gt_labels[min_area_inds]
     labels[min_area == INF] = num_classes
-    bbox_targets = bbox_targets[range(num_points), min_area_inds]
+    # Fanchen: ERROR!
+    # Traceback (most recent call last):
+    #   File "/home/CtrlDrive/fanchen/anaconda3/envs/torch/lib/python3.8/site-packages/torch/multiprocessing/spawn.py", line 20, in _wrap
+    #     fn(i, *args)
+    #   File "/home/CtrlDrive/fanchen/anaconda3/envs/torch/lib/python3.8/site-packages/detectron2/engine/launch.py", line 89, in _distributed_worker
+    #     main_func(*args)
+    #   File "/home/CtrlDrive/fanchen/pyws/ee898_pa1/train_net.py", line 215, in main
+    #     return trainer.train()
+    #   File "/home/CtrlDrive/fanchen/pyws/ee898_pa1/train_net.py", line 95, in train
+    #     self.train_loop(self.start_iter, self.max_iter)
+    #   File "/home/CtrlDrive/fanchen/pyws/ee898_pa1/train_net.py", line 85, in train_loop
+    #     self.run_step()
+    #   File "/home/CtrlDrive/fanchen/anaconda3/envs/torch/lib/python3.8/site-packages/detectron2/engine/train_loop.py", line 215, in run_step
+    #     loss_dict = self.model(data)
+    #   File "/home/CtrlDrive/fanchen/anaconda3/envs/torch/lib/python3.8/site-packages/torch/nn/modules/module.py", line 550, in __call__
+    #     result = self.forward(*input, **kwargs)
+    #   File "/home/CtrlDrive/fanchen/anaconda3/envs/torch/lib/python3.8/site-packages/torch/nn/parallel/distributed.py", line 445, in forward
+    #     output = self.module(*inputs[0], **kwargs[0])
+    #   File "/home/CtrlDrive/fanchen/anaconda3/envs/torch/lib/python3.8/site-packages/torch/nn/modules/module.py", line 550, in __call__
+    #     result = self.forward(*input, **kwargs)
+    #   File "/home/CtrlDrive/fanchen/pyws/ee898_pa1/fcos/modeling/meta_arch/one_stage_detector.py", line 13, in forward
+    #     return super().forward(batched_inputs)
+    #   File "/home/CtrlDrive/fanchen/anaconda3/envs/torch/lib/python3.8/site-packages/detectron2/modeling/meta_arch/rcnn.py", line 245, in forward
+    #     proposals, proposal_losses = self.proposal_generator(images, features, gt_instances)
+    #   File "/home/CtrlDrive/fanchen/anaconda3/envs/torch/lib/python3.8/site-packages/torch/nn/modules/module.py", line 550, in __call__
+    #     result = self.forward(*input, **kwargs)
+    #   File "/home/CtrlDrive/fanchen/pyws/ee898_pa1/fcos/modeling/fcos/fcos.py", line 92, in forward
+    #     training_targets = FCOSTargets(all_level_points, gt_instances, self.cfg)
+    #   File "/home/CtrlDrive/fanchen/pyws/ee898_pa1/fcos/modeling/fcos/fcos_targets.py", line 23, in FCOSTargets
+    #     return fcos_target(
+    #   File "/home/CtrlDrive/fanchen/pyws/ee898_pa1/fcos/modeling/fcos/fcos_targets.py", line 170, in fcos_target
+    #     labels_list, bbox_targets_list = multi_apply(
+    #   File "/home/CtrlDrive/fanchen/pyws/ee898_pa1/fcos/utils/misc.py", line 8, in multi_apply
+    #     return tuple(map(list, zip(*map_results)))
+    #   File "/home/CtrlDrive/fanchen/pyws/ee898_pa1/fcos/modeling/fcos/fcos_targets.py", line 390, in fcos_target_single_image
+    #     bbox_targets = bbox_targets[range(num_points), min_area_inds]
+    # RuntimeError: CUDA out of memory. Tried to allocate 6.12 GiB (GPU 1; 11.91 GiB total capacity; 7.14 GiB already allocated; 4.18 GiB free; 7.20 GiB reserved in total by PyTorch)
+
+    # Fanchen: DEBUG
+    # torch.save((bbox_targets, num_points, min_area_inds, inside_regress_range, labels),
+    #            '/home/CtrlDrive/fanchen/pyws/ee898_pa1/bbstgt.data')
+    # exit(0)
+    # >>> num_points
+    # 20267
+    # >>> bbox_targets.size()
+    # torch.Size([20267, 7, 4])
+    # >>> min_area_inds.size()
+    # torch.Size([20267, 1])
+    # >>> bbox_targets[range(num_points), min_area_inds]
+    # Traceback (most recent call last):
+    #   File "<stdin>", line 1, in <module>
+    # RuntimeError: CUDA out of memory. Tried to allocate 6.12 GiB (GPU 1; 11.91 GiB total capacity; 6.12 GiB already allocated; 5.29 GiB free; 6.14 GiB reserved in total by PyTorch)
+    # >>> bbox_targets[0, min_area_inds[0]]
+    # tensor([[-142.7276, -279.8969,  219.0515,  695.4286]], device='cuda:1')
+    # >>> bbox_targets[range(2), min_area_inds[:2]]
+    # tensor([[[-142.7276, -279.8969,  219.0515,  695.4286],
+    #          [-134.7276, -279.8969,  211.0515,  695.4286]],
+    #
+    #         [[-142.7276, -279.8969,  219.0515,  695.4286],
+    #          [-134.7276, -279.8969,  211.0515,  695.4286]]], device='cuda:1')
+
+    # Fanchen: TEST
+    bbox_targets = cat([bbox_targets[i, min_area_inds[i]] for i in range(num_points)])
+    # bbox_targets = bbox_targets[range(num_points), min_area_inds]
     return labels, bbox_targets
 
 
