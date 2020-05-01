@@ -65,6 +65,19 @@ def get_points(features, fpn_strides):
         points.append(
             # run on single feature-level
             get_points_single(featmap_size, stride, feat.device))
+    # Fanchen: DEBUG
+    # torch.save((features, fpn_strides, points), '/home/CtrlDrive/fanchen/pyws/ee898_pa1/debugdata/getpoints.data')
+    # exit(0)
+    # >>> len(features)
+    # 5
+    # >>> [feature.size() for feature in features]
+    # [torch.Size([2, 256, 100, 152]), torch.Size([2, 256, 50, 76]), torch.Size([2, 256, 25, 38]), torch.Size([2, 256, 13, 19]), torch.Size([2, 256, 7, 10])]
+    # >>> fpn_strides
+    # [8, 16, 32, 64, 128]
+    # >>> len(points)
+    # 5
+    # >>> [point.size() for point in points]
+    # [torch.Size([15200, 2]), torch.Size([3800, 2]), torch.Size([950, 2]), torch.Size([247, 2]), torch.Size([70, 2])]
     return points
 
 
@@ -178,13 +191,21 @@ def fcos_target(
         normalize_reg_targets=normalize_reg_targets,
         num_classes=num_classes
     )
-
+    # Fanchen: DEBUG
+    # torch.save((labels_list, bbox_targets_list, num_points), '/home/CtrlDrive/fanchen/pyws/ee898_pa1/debugdata/tgt2.data')
+    # exit(0)
     # split to per img, per feature level
     labels_list = [labels.split(num_points, 0) for labels in labels_list]
     bbox_targets_list = [
         bbox_targets.split(num_points, 0)
         for bbox_targets in bbox_targets_list
     ]
+    # >>> [kk.size() for kk in ll[0]]
+    # [torch.Size([16400, 1]), torch.Size([4100, 1]), torch.Size([1025, 1]), torch.Size([273, 1]), torch.Size([77, 1])]
+    # >>> [kk.size() for kk in btl[0]]
+    # [torch.Size([16400, 4]), torch.Size([4100, 4]), torch.Size([1025, 4]), torch.Size([273, 4]), torch.Size([77, 4])]
+    # >>> num_points
+    # [16400, 4100, 1025, 273, 77]
 
     # concat per level image
     concat_labels = []
@@ -203,6 +224,26 @@ def fcos_target(
         concat_bbox_targets.append(
             cat([bbox_targets[i] / normalizer for bbox_targets in bbox_targets_list])
         )
+    # Fanchen: DEBUG
+    # torch.save((points,
+    #             regress_ranges,
+    #             gt_instance_list,
+    #             fpn_strides,
+    #             center_sample_cfg,
+    #             normalize_reg_targets,
+    #             num_classes,
+    #             concat_labels,
+    #             concat_bbox_targets), '/home/CtrlDrive/fanchen/pyws/ee898_pa1/debugdata/fcostgt.data')
+    # exit(0)
+    # >>> len(points)
+    # 5
+    # >>> [point.size() for point in points]
+    # [torch.Size([16800, 2]), torch.Size([4200, 2]), torch.Size([1050, 2]), torch.Size([273, 2]), torch.Size([77, 2])]
+    # >>> [concat_label.size() for concat_label in concat_labels]
+    # [torch.Size([33600, 1]), torch.Size([8400, 1]), torch.Size([2100, 1]), torch.Size([546, 1]), torch.Size([154, 1])]
+    # >>> [tgt.size() for tgt in concat_bbox_targets]
+    # [torch.Size([33600, 4]), torch.Size([8400, 4]), torch.Size([2100, 4]), torch.Size([546, 4]), torch.Size([154, 4])]
+
     return concat_labels, concat_bbox_targets
 
 
@@ -231,9 +272,65 @@ def fcos_target_single_image(
     center_sample = center_sample_cfg.pop('center_sample', False)
     center_radius = center_sample_cfg.pop('center_radius', 1.5)
 
+    # Fanchen: DEBUG
+    # for _ in range(5):
+    #     print('DEBUG: fcos_target_single_image')
+    # torch.save((
+    #     gt_instances,
+    #     points,
+    #     regress_ranges,
+    #     num_points_per_level,
+    #     fpn_strides,
+    #     center_sample_cfg,
+    #     normalize_reg_targets,
+    #     num_classes,
+    #     center_sample,
+    #     center_radius
+    # ), '/home/CtrlDrive/fanchen/pyws/ee898_pa1/debugdata/tgt.data')
+    # exit(0)
+
+    # >>> gt_instances
+    # Instances(num_instances=2, image_height=800, image_width=1199,
+    # fields=[gt_boxes: Boxes(tensor([[ 115.5350,   30.2576,  803.5361,  732.7401],
+    # [ 535.6720,   14.3888, 1199.0000,  780.2155]], device='cuda:3')),
+    # gt_classes: tensor([22, 22], device='cuda:3')])
+
+    # >>> points, points.size()
+    # (tensor([[   4.,    4.],
+    #         [  12.,    4.],
+    #         [  20.,    4.],
+    #         ...,
+    #         [ 960.,  832.],
+    #         [1088.,  832.],
+    #         [1216.,  832.]], device='cuda:3'), torch.Size([20267, 2]))
+
+    # >>> regress_ranges, regress_ranges.size()
+    # (tensor([[-1.0000e+00,  6.4000e+01],
+    #         [-1.0000e+00,  6.4000e+01],
+    #         [-1.0000e+00,  6.4000e+01],
+    #         ...,
+    #         [ 5.1200e+02,  1.0000e+08],
+    #         [ 5.1200e+02,  1.0000e+08],
+    #         [ 5.1200e+02,  1.0000e+08]], device='cuda:3'), torch.Size([20267, 2]))
+
+    # >>> num_points_per_level
+    # [15200, 3800, 950, 247, 70]
+    # >>> fpn_strides
+    # [8, 16, 32, 64, 128]
+    # >>> center_sample_cfg
+    # {}
+    # >>> normalize_reg_targets
+    # True
+    # >>> num_classes
+    # 80
+    # >>> center_sample
+    # False
+    # >>> center_radius
+    # 1.5
+
     # here, num_points accumulates all locations across all feature levels.
-    num_points = points.size(0)  # Fanchen: Sum of W*H for all feature levels, len(all sampling positions)
-    num_gts = len(gt_instances)  # Fanchen: The # of bboxes in the img
+    num_points = points.size(0)  # Fanchen: 20267, Sum of W*H for all feature levels, len(all sampling positions)
+    num_gts = len(gt_instances)  # Fanchen: 2, The # of bboxes in the img
 
     # Fanchen: An example of gt_instances (gt_instaces[0]) Instances(num_instances=2, image_height=800,
     # image_width=1196, fields=[gt_boxes: Boxes(tensor([[ 634.6836,  260.2990, 1120.6893,  791.2336], [ 716.8525,
@@ -246,7 +343,12 @@ def fcos_target_single_image(
 
     # get class labels and bboxes from `gt_instances`.
     gt_labels = gt_instances.gt_classes
+    # Fanchen: >>> gt_instances.gt_classes
+    # tensor([22, 22], device='cuda:3')
     gt_bboxes = gt_instances.gt_boxes
+    # Fanchen: >>> gt_bboxes
+    # Boxes(tensor([[ 115.5350,   30.2576,  803.5361,  732.7401],
+    #         [ 535.6720,   14.3888, 1199.0000,  780.2155]], device='cuda:3'))
 
     if num_gts == 0:
         return (
@@ -262,8 +364,37 @@ def fcos_target_single_image(
     # areas = areas[None].repeat(num_points, 1, 1)  # 2. hint: use :func:`torch.repeat`.
     # areas.size() -> torch.Size([2, 5, 1])
 
-    areas = gt_bboxes.area().view(-1, 1)  # 1. `torch.Tensor` shape of (num_gts, 1)
+    # areas = gt_bboxes.area().view(-1, 1)  # 1. `torch.Tensor` shape of (num_gts, 1)
+    areas = gt_bboxes.area().reshape(-1, 1)  # 1. `torch.Tensor` shape of (num_gts, 1)
+    # Fanchen: >>> gt_bboxes.area().view(-1, 1)
+    # tensor([[483308.6875],
+    #         [507994.3125]], device='cuda:3')
+    # >>> gt_bboxes.area().view(-1, 1).size()
+    # torch.Size([2, 1])
     areas = areas[None].repeat(num_points, 1, 1)  # 2. hint: use :func:`torch.repeat`.
+    # Fanchen: >>> areas
+    # tensor([[[483308.6875],
+    #          [507994.3125]],
+    #
+    #         [[483308.6875],
+    #          [507994.3125]],
+    #
+    #         [[483308.6875],
+    #          [507994.3125]],
+    #
+    #         ...,
+    #
+    #         [[483308.6875],
+    #          [507994.3125]],
+    #
+    #         [[483308.6875],
+    #          [507994.3125]],
+    #
+    #         [[483308.6875],
+    #          [507994.3125]]], device='cuda:3')
+    # >>> areas.size()
+    # torch.Size([20267, 2, 1])
+
     # Fanchen: vals, indices = areas.min(dim=1)
 
     # Fanchen: DEBUG
@@ -275,17 +406,73 @@ def fcos_target_single_image(
     # torch.Size([20267, 2]) 20267 16
 
     # `regress_ranges`: should be `torch.Tensor` shape of (num_points, num_gts, 2)
-    regress_ranges = cat([r.expand(num_gts, 2) for r in regress_ranges]).view(num_points, num_gts, 2)
+    # regress_ranges = cat([r.expand(num_gts, 2) for r in regress_ranges]).view(num_points, num_gts, 2)
+    # regress_ranges = cat([r.expand(num_gts, 2) for r in regress_ranges]).reshape(num_points, num_gts, 2)
+    regress_ranges = regress_ranges.unsqueeze(1).expand(num_points, num_gts, 2)  # Fanchen: 0501, modified
     # hint: use :func:`torch.expand`.
+    # Fanchen: >>> regress_ranges
+    # tensor([[[-1.0000e+00,  6.4000e+01],
+    #          [-1.0000e+00,  6.4000e+01]],
+    #
+    #         [[-1.0000e+00,  6.4000e+01],
+    #          [-1.0000e+00,  6.4000e+01]],
+    #
+    #         [[-1.0000e+00,  6.4000e+01],
+    #          [-1.0000e+00,  6.4000e+01]],
+    #
+    #         ...,
+    #
+    #         [[ 5.1200e+02,  1.0000e+08],
+    #          [ 5.1200e+02,  1.0000e+08]],
+    #
+    #         [[ 5.1200e+02,  1.0000e+08],
+    #          [ 5.1200e+02,  1.0000e+08]],
+    #
+    #         [[ 5.1200e+02,  1.0000e+08],
+    #          [ 5.1200e+02,  1.0000e+08]]], device='cuda:3')
+    # >>> regress_ranges.size()
+    # torch.Size([20267, 2, 2])
 
     # `gt_bboxes`: should be `torch.Tensor` shape of (num_points, num_gts, 4)
     # Fanchen: gt_bboxes.tensor.size() -> [num_gts, 4]
     gt_bboxes = gt_bboxes.tensor.expand(num_points, num_gts, 4)  # hint: use :func:`torch.expand`.
+    # Fanchen: >>> gt_bboxes
+    # tensor([[[ 115.5350,   30.2576,  803.5361,  732.7401],
+    #          [ 535.6720,   14.3888, 1199.0000,  780.2155]],
+    #
+    #         [[ 115.5350,   30.2576,  803.5361,  732.7401],
+    #          [ 535.6720,   14.3888, 1199.0000,  780.2155]],
+    #
+    #         [[ 115.5350,   30.2576,  803.5361,  732.7401],
+    #          [ 535.6720,   14.3888, 1199.0000,  780.2155]],
+    #
+    #         ...,
+    #
+    #         [[ 115.5350,   30.2576,  803.5361,  732.7401],
+    #          [ 535.6720,   14.3888, 1199.0000,  780.2155]],
+    #
+    #         [[ 115.5350,   30.2576,  803.5361,  732.7401],
+    #          [ 535.6720,   14.3888, 1199.0000,  780.2155]],
+    #
+    #         [[ 115.5350,   30.2576,  803.5361,  732.7401],
+    #          [ 535.6720,   14.3888, 1199.0000,  780.2155]]], device='cuda:3')
+    # >>> gt_bboxes.size()
+    # torch.Size([20267, 2, 4])
 
     # align each coordinate  component xs, ys in shape as (num_points, num_gts)
     xs, ys = points[:, 0], points[:, 1]  # Fanchen: xs.size(), ys.size() -> [num_points, ]
-    xs = xs.view(-1, 1).expand(num_points, num_gts)  # hint: use :func:`torch.expand`.
-    ys = ys.view(-1, 1).expand(num_points, num_gts)  # hint: use :func:`torch.expand`.
+    # xs = xs.view(-1, 1).expand(num_points, num_gts)  # hint: use :func:`torch.expand`.
+    # ys = ys.view(-1, 1).expand(num_points, num_gts)  # hint: use :func:`torch.expand`.
+    xs = xs.reshape(-1, 1).expand(num_points, num_gts)  # hint: use :func:`torch.expand`.
+    ys = ys.reshape(-1, 1).expand(num_points, num_gts)  # hint: use :func:`torch.expand`.
+    # Fanchen: >>> xs, xs.size()
+    # (tensor([[   4.,    4.],
+    #         [  12.,   12.],
+    #         [  20.,   20.],
+    #         ...,
+    #         [ 960.,  960.],
+    #         [1088., 1088.],
+    #         [1216., 1216.]], device='cuda:3'), torch.Size([20267, 2]))
 
     # Fanchen: DEBUG
     # torch.save((xs, ys, gt_bboxes), '/home/CtrlDrive/fanchen/pyws/ee898_pa1/tt.data')
@@ -352,7 +539,7 @@ def fcos_target_single_image(
     else:
         # condition1: a point should be inside a gt bbox
         # hint: all distances (l, t, r, b) > 0. use :func:`torch.min`.
-        inside_gt_bbox_mask = bbox_targets.min(dim=-1)[0] > 0
+        inside_gt_bbox_mask = bbox_targets.min(dim=-1)[0] > 0  # Fanchen: w/ size [num_points, num_gts]
 
     # condition2: limit the regression range for each location
     max_regress_distance = bbox_targets.max(dim=-1)[0]  # hint: use :func:`torch.max`.
@@ -362,7 +549,7 @@ def fcos_target_single_image(
     #   between the side values regress_ranges.
     # See section 3.2 3rd paragraph on FCOS paper.
     inside_regress_range = (max_regress_distance >= regress_ranges[:, :, 0]) & \
-                           (max_regress_distance <= regress_ranges[:, :, 1])
+                           (max_regress_distance <= regress_ranges[:, :, 1])  # Fanchen: w/ size [num_points, num_gts]
 
     # filter areas that violate condition1 and condition2 above.
 
@@ -381,7 +568,7 @@ def fcos_target_single_image(
     # If there are still more than one objects for a location,
     # we choose the one with minimal area across `num_gts` axis.
     # Hint: use :func:`torch.min`.
-    min_area, min_area_inds = areas.min(dim=1)
+    min_area, min_area_inds = areas.min(dim=1)  # Fanchen: both w/ size [num_points, 1]
 
     # ground-truth assignments w.r.t. bbox area indices
     labels = gt_labels[min_area_inds]
@@ -446,10 +633,14 @@ def fcos_target_single_image(
     #
     #         [[-142.7276, -279.8969,  219.0515,  695.4286],
     #          [-134.7276, -279.8969,  211.0515,  695.4286]]], device='cuda:1')
-
-    # Fanchen: TEST
-    bbox_targets = cat([bbox_targets[i, min_area_inds[i]] for i in range(num_points)])
-    # bbox_targets = bbox_targets[range(num_points), min_area_inds]
+    # torch.save((bbox_targets, num_points, min_area_inds, inside_regress_range, labels),
+    #            '/home/CtrlDrive/fanchen/pyws/ee898_pa1/bbstgt0501.data')
+    # exit(0)
+    # Fanchen: modified
+    # bbox_targets = cat([bbox_targets[i, min_area_inds[i]] for i in range(num_points)])
+    bbox_targets = bbox_targets[range(num_points), min_area_inds.squeeze(1)]  # Fanchen: 0501 modified
+    # bbox_targets = bbox_targets[range(num_points), min_area_inds]  # original
+    # bbox_targets = bbox_targets[torch.arange(num_points), min_area_inds]
     return labels, bbox_targets
 
 
@@ -466,6 +657,10 @@ def compute_centerness_targets(pos_bbox_targets):
     """
 
     """ your code starts here """
+    # Fanchen: DEBUG
+    # torch.save(pos_bbox_targets, '/home/CtrlDrive/fanchen/pyws/ee898_pa1/debugdata/ctnstgt.data')
+    # exit(0)
+
     lr = pos_bbox_targets[:, [0, 2]]
     tb = pos_bbox_targets[:, [1, 3]]
     # centerness_targets = pos_bbox_targets.new_zeros(pos_bbox_targets.size(0), 1)

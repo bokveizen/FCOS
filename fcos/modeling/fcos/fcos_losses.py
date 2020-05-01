@@ -53,8 +53,26 @@ def FCOSLosses(
         ], dim=0)
 
     # flatten classification and regression targets.
-    flatten_labels = cat(labels)
+    flatten_labels = cat(labels).squeeze(1)  # Fanchen: modified
     flatten_bbox_targets = cat(bbox_targets)
+
+    # Fanchen: DEBUG
+    # torch.save((
+    #     cls_scores,
+    #     bbox_preds,
+    #     centernesses,
+    #     labels,
+    #     bbox_targets,
+    #     reg_loss,
+    #     num_classes,
+    #     focal_loss_alpha,
+    #     focal_loss_gamma,
+    #     flatten_cls_scores,
+    #     flatten_bbox_preds,
+    #     flatten_centernesses,
+    #     flatten_labels,
+    #     flatten_bbox_targets), '/home/CtrlDrive/fanchen/pyws/ee898_pa1/debugdata/loss.data')
+    # exit(0)
 
     # retain indices of positive predictions.
     pos_inds = torch.nonzero(flatten_labels != num_classes).squeeze(1)
@@ -100,7 +118,8 @@ def FCOSLosses(
     # Traceback (most recent call last):
     #   File "<stdin>", line 1, in <module>
     # IndexError: shape mismatch: indexing tensors could not be broadcast together with shapes [217, 2], [217, 2, 1]
-    class_target[pos_inds[:, 0], flatten_labels[pos_inds[:, 0]]] = 1  # Fanchen: try to fix
+    # class_target[pos_inds[:, 0], flatten_labels[pos_inds[:, 0]]] = 1  # Fanchen: try to fix
+    class_target[pos_inds, flatten_labels[pos_inds]] = 1  # original
 
     # classification loss: Focal loss
     loss_cls = sigmoid_focal_loss_jit(
@@ -112,9 +131,12 @@ def FCOSLosses(
     ) / num_pos
 
     # compute regression loss and centerness loss only for positive samples.
-    pos_bbox_preds = flatten_bbox_preds[pos_inds[:, 0]]  # Fanchen: try to fix
-    pos_centernesses = flatten_centernesses[pos_inds[:, 0]]  # Fanchen: try to fix
-    pos_bbox_targets = flatten_bbox_targets[pos_inds[:, 0]]  # Fanchen: try to fix
+    # pos_bbox_preds = flatten_bbox_preds[pos_inds[:, 0]]  # Fanchen: try to fix
+    # pos_centernesses = flatten_centernesses[pos_inds[:, 0]]  # Fanchen: try to fix
+    # pos_bbox_targets = flatten_bbox_targets[pos_inds[:, 0]]  # Fanchen: try to fix
+    pos_bbox_preds = flatten_bbox_preds[pos_inds]
+    pos_centernesses = flatten_centernesses[pos_inds]
+    pos_bbox_targets = flatten_bbox_targets[pos_inds]
 
     # Fanchen: DEBUG
     # torch.save((flatten_bbox_preds, pos_inds, pos_bbox_preds, pos_centernesses, pos_bbox_targets),
