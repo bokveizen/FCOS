@@ -12,10 +12,14 @@ MODEL:
     # (and should be controlled on this config file) from FCOS paper Table 3.
     # you may `FREELY CHANGE` on these configurations related to improvements.
     NORM: "GN"
+
     CTR_ON_REG: True
-    CENTER_SAMPLE: True
-    POS_RADIUS: 1.5
-    LOC_LOSS_TYPE: "giou"
+
+#    CENTER_SAMPLE: True
+#    POS_RADIUS: 1.5
+
+#    LOC_LOSS_TYPE: "giou"
+
     NORMALIZE_REG_TARGETS: True  # fix with True
     # ---
 INPUT:

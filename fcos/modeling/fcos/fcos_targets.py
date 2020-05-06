@@ -269,24 +269,24 @@ def fcos_target_single_image(
         bbox_targets (Tensor): regression targets of every feature point in all feature levels
             for a single image. each column corresponds to a tensor shape of (l, t, r, b).
     """
-    center_sample = center_sample_cfg.pop('center_sample', False)
-    center_radius = center_sample_cfg.pop('center_radius', 1.5)
+    center_sample = center_sample_cfg['center_sample']
+    center_radius = center_sample_cfg['center_radius']
 
     # Fanchen: DEBUG
     # for _ in range(5):
     #     print('DEBUG: fcos_target_single_image')
-    # torch.save((
-    #     gt_instances,
-    #     points,
-    #     regress_ranges,
-    #     num_points_per_level,
-    #     fpn_strides,
-    #     center_sample_cfg,
-    #     normalize_reg_targets,
-    #     num_classes,
-    #     center_sample,
-    #     center_radius
-    # ), '/home/CtrlDrive/fanchen/pyws/ee898_pa1/debugdata/tgt.data')
+    torch.save((
+        gt_instances,
+        points,
+        regress_ranges,
+        num_points_per_level,
+        fpn_strides,
+        center_sample_cfg,
+        normalize_reg_targets,
+        num_classes,
+        center_sample,
+        center_radius
+    ), '/home/CtrlDrive/fanchen/pyws/ee898_pa1/debugdata/tgt.data')
     # exit(0)
 
     # >>> gt_instances
@@ -490,14 +490,14 @@ def fcos_target_single_image(
     bbox_targets = torch.stack((left, top, right, bottom), -1)  # Fanchen: w/ size [num_points, num_gts, 4]
 
     if center_sample:
-        # Fanchen: TODO: to do later as it's not mandatory
         # This codeblock corresponds to extra credits. Note that `Not mandatory`.
         # condition1: inside a `center bbox`
         radius = center_radius
-        center_xs = NotImplemented  # center x-coordinates of gt_bboxes
-        center_ys = NotImplemented  # center y-coordinates of gt_bboxes
-        center_gts = torch.zeros_like(gt_bboxes)
-        stride = center_xs.new_zeros(center_xs.shape)
+        center_xs = (gt_bboxes[:, :, 0] + gt_bboxes[:, :, 2]) * 0.5  # center x-coordinates of gt_bboxes
+        center_ys = (gt_bboxes[:, :, 1] + gt_bboxes[:, :, 3]) * 0.5  # center y-coordinates of gt_bboxes
+        # Fanchen: center_xs, ys w/ size [num_points, num_gts]
+        center_gts = torch.zeros_like(gt_bboxes)  # Fanchen: w/ size [num_points, num_gts, 4]
+        stride = center_xs.new_zeros(center_xs.shape)  # Fanchen: w/ size [num_points, num_gts]
 
         # project the points on current level back to the `original` sizes
         lvl_begin = 0
@@ -505,29 +505,35 @@ def fcos_target_single_image(
             lvl_end = lvl_begin + num_points_lvl
             # radius back-projected to image coordinates
             # hint: use `fpn_strides` and `radius`
-            stride[lvl_begin:lvl_end] = NotImplemented
+            stride[lvl_begin:lvl_end] = fpn_strides[lvl_idx] * radius
             lvl_begin = lvl_end
 
         # The boundary coordinates w.r.t radius(stride) and center points
         # (center coords) (- or +) (stride)
-        x_mins = NotImplemented
-        y_mins = NotImplemented
-        x_maxs = NotImplemented
-        y_maxs = NotImplemented
+        x_mins = center_xs - stride  # Fanchen: w/ size [num_points, num_gts]
+        y_mins = center_ys - stride
+        x_maxs = center_xs + stride
+        y_maxs = center_ys + stride
 
         # Clip each four coordinates so that (x_mins, y_mins) and (x_maxs, y_maxs) are
         #   inside gt_bboxes. HINT: use :func:`torch.where`.
-        center_gts[..., 0] = NotImplemented
-        center_gts[..., 1] = NotImplemented
-        center_gts[..., 2] = NotImplemented
-        center_gts[..., 3] = NotImplemented
+        center_gts[..., 0] = torch.where(x_mins > gt_bboxes[:, :, 0], x_mins, gt_bboxes[:, :, 0])
+        center_gts[..., 1] = torch.where(y_mins > gt_bboxes[:, :, 1], y_mins, gt_bboxes[:, :, 1])
+        center_gts[..., 2] = torch.where(x_maxs < gt_bboxes[:, :, 2], x_maxs, gt_bboxes[:, :, 2])
+        center_gts[..., 3] = torch.where(y_maxs < gt_bboxes[:, :, 3], y_maxs, gt_bboxes[:, :, 3])
 
         # distances from a location to each side of the bounding box
         # Refer to equation(1) from FCOS paper.
-        cb_dist_left = NotImplemented
-        cb_dist_right = NotImplemented
-        cb_dist_top = NotImplemented
-        cb_dist_bottom = NotImplemented
+        # Fanchen:
+        # left = xs[:, :] - gt_bboxes[:, :, 0]
+        # right = gt_bboxes[:, :, 2] - xs[:, :]
+        # top = ys[:, :] - gt_bboxes[:, :, 1]
+        # bottom = gt_bboxes[:, :, 3] - ys[:, :]
+
+        cb_dist_left = xs[:, :] - center_gts[..., 0]
+        cb_dist_right = center_gts[..., 2] - xs[:, :]
+        cb_dist_top = ys[:, :] - center_gts[..., 1]
+        cb_dist_bottom = center_gts[..., 3] - ys[:, :]
         center_bbox = torch.stack(
             (cb_dist_left, cb_dist_top, cb_dist_right, cb_dist_bottom),
             -1
@@ -535,7 +541,7 @@ def fcos_target_single_image(
         # condition1: a point from center_bbox should be inside a gt bbox
         # all distances (center_l, center_t, center_r, center_b) > 0
         # hint: all distances (l, t, r, b) > 0. use :func:`torch.min`.
-        inside_gt_bbox_mask = NotImplemented
+        inside_gt_bbox_mask = center_bbox.min(dim=-1)[0] > 0
     else:
         # condition1: a point should be inside a gt bbox
         # hint: all distances (l, t, r, b) > 0. use :func:`torch.min`.

@@ -211,43 +211,65 @@ class FCOS(nn.Module):
             centerness = centerness.permute(1, 2, 0).reshape(-1).sigmoid()
 
             # Fanchen: DEBUG
-            # torch.save((scores, bbox_pred, centerness), '/home/CtrlDrive/fanchen/pyws/ee898_pa1/p4.data')
-            # exit(-1)
-            # >>> scores, scores.size()
-            # (tensor([[0.0101, 0.0100, 0.0100,  ..., 0.0099, 0.0100, 0.0100],
-            #         [0.0101, 0.0099, 0.0100,  ..., 0.0099, 0.0100, 0.0100],
-            #         [0.0100, 0.0098, 0.0100,  ..., 0.0099, 0.0099, 0.0100],
+            # torch.save((cls_scores,
+            #             bbox_preds,
+            #             centernesses,
+            #             all_level_points,
+            #             image_size,
+            #             scores,
+            #             bbox_pred,
+            #             centerness), '/home/CtrlDrive/fanchen/pyws/ee898_pa1/debugdata/inf.data')
+            # print('DEBUG: inf.data')
+            # exit(0)
+            # >>> len(cls_scores)
+            # 5
+            # >>> [score.size() for score in cls_scores]
+            # [torch.Size([80, 152, 100]), torch.Size([80, 76, 50]), torch.Size([80, 38, 25]), torch.Size([80, 19, 13]), torch.Size([80, 10, 7])]
+            # >>> scores
+            # tensor([[0.0082, 0.0043, 0.0070,  ..., 0.0048, 0.0050, 0.0046],
+            #         [0.0034, 0.0016, 0.0029,  ..., 0.0021, 0.0017, 0.0015],
+            #         [0.0024, 0.0013, 0.0020,  ..., 0.0018, 0.0017, 0.0013],
             #         ...,
-            #         [0.0097, 0.0100, 0.0100,  ..., 0.0099, 0.0102, 0.0101],
-            #         [0.0098, 0.0099, 0.0101,  ..., 0.0100, 0.0101, 0.0100],
-            #         [0.0099, 0.0099, 0.0101,  ..., 0.0100, 0.0101, 0.0100]],
-            #        device='cuda:4'), torch.Size([12400, 80]))
+            #         [0.0050, 0.0022, 0.0024,  ..., 0.0010, 0.0013, 0.0008],
+            #         [0.0057, 0.0027, 0.0032,  ..., 0.0014, 0.0015, 0.0010],
+            #         [0.0129, 0.0077, 0.0085,  ..., 0.0048, 0.0057, 0.0040]],
+            #        device='cuda:7')
+            # >>> scores.size()
+            # torch.Size([15200, 80])
             # >>> bbox_pred, bbox_pred.size()
-            # (tensor([[8.0000, 7.9929, 7.9799, 7.9859],
-            #         [8.0176, 7.9548, 7.9995, 8.0126],
-            #         [8.0005, 7.9393, 7.9697, 8.0328],
+            # (tensor([[ 6.7271,  6.7130, 16.7200, 13.4471],
+            #         [12.8911,  5.4016, 11.4462, 10.5563],
+            #         [17.2124,  5.3992, 17.0486, 10.5352],
             #         ...,
-            #         [8.0280, 7.9602, 7.9753, 7.9950],
-            #         [8.0346, 7.9741, 7.9482, 7.9810],
-            #         [7.9888, 7.9795, 7.9742, 7.9920]], device='cuda:4'), torch.Size([12400, 4]))
+            #         [22.8796, 15.5267, 19.0822,  8.6359],
+            #         [28.2969, 15.3834, 15.9940,  9.6031],
+            #         [18.1814, 19.1390, 12.2707, 13.9811]], device='cuda:7'), torch.Size([15200, 4]))
             # >>> centerness, centerness.size()
-            # (tensor([0.5003, 0.5017, 0.5008,  ..., 0.5003, 0.5005, 0.5011], device='cuda:4'), torch.Size([12400]))
+            # (tensor([0.1976, 0.2229, 0.2007,  ..., 0.2555, 0.2092, 0.2774], device='cuda:7'), torch.Size([15200]))
+            # >>> all_level_points[0].size()
+            # torch.Size([15200, 2])
+
             """ Your code starts here """
             # H, W = image_size
-            scores *= centerness[:, None]
             scores_i_th_inds = torch.zeros_like(scores) + (scores > self.score_threshold)
             scores *= scores_i_th_inds
+            scores *= centerness[:, None]
             topk_cnt = scores_i_th_inds.reshape(-1).sum().clamp(max=self.nms_pre_topk)
 
+            bbox_pred = torch.stack([points[:, 0] - bbox_pred[:, 0],
+                                     points[:, 1] - bbox_pred[:, 1],
+                                     points[:, 0] + bbox_pred[:, 2],
+                                     points[:, 1] + bbox_pred[:, 3]], dim=1)
+
             flatten_scores = scores.reshape(-1)  # Fanchen: size is (H*W*C, )
-            flatten_labels = torch.tensor(range(self.num_classes)).\
-                repeat(image_size[0] * image_size[1])  # Fanchen: size is (H*W*C, )
-            flatten_boxes = bbox_pred.unsqueeze(1).\
+            # flatten_labels = torch.tensor(range(self.num_classes)). \
+            #     repeat(image_size[0] * image_size[1])  # Fanchen: size is (H*W*C, )
+            flatten_boxes = bbox_pred.unsqueeze(1). \
                 expand(-1, self.num_classes, -1).reshape(-1, 4)  # Fanchen: size is (H*W*C, 4)
             pred_scores, topk_inds = flatten_scores.topk(int(topk_cnt))
             pred_scores = torch.sqrt(pred_scores)
             pred_boxes = Boxes(flatten_boxes[topk_inds])
-            pred_classes = flatten_labels[topk_inds]
+            pred_classes = topk_inds % self.num_classes
             box_list = Instances(image_size, pred_boxes=pred_boxes, scores=pred_scores, pred_classes=pred_classes)
             bboxes_list.append(box_list)
             # Fanchen: tensor (Tensor[float]): a Nx4 matrix.  Each row is (x1, y1, x2, y2).
@@ -267,4 +289,7 @@ class FCOS(nn.Module):
             # Limit to max_per_image detections **over all classes**
             max_proposals=self.nms_post_topk
         )
+        # Fanchen: DEBUG
+        # torch.save((bboxes_list, results), '/home/CtrlDrive/fanchen/pyws/ee898_pa1/debugdata/infres.data')
+        # exit(0)
         return results
