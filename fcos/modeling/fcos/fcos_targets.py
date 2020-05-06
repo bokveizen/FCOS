@@ -275,18 +275,18 @@ def fcos_target_single_image(
     # Fanchen: DEBUG
     # for _ in range(5):
     #     print('DEBUG: fcos_target_single_image')
-    torch.save((
-        gt_instances,
-        points,
-        regress_ranges,
-        num_points_per_level,
-        fpn_strides,
-        center_sample_cfg,
-        normalize_reg_targets,
-        num_classes,
-        center_sample,
-        center_radius
-    ), '/home/CtrlDrive/fanchen/pyws/ee898_pa1/debugdata/tgt.data')
+    # torch.save((
+    #     gt_instances,
+    #     points,
+    #     regress_ranges,
+    #     num_points_per_level,
+    #     fpn_strides,
+    #     center_sample_cfg,
+    #     normalize_reg_targets,
+    #     num_classes,
+    #     center_sample,
+    #     center_radius
+    # ), '/home/CtrlDrive/fanchen/pyws/ee898_pa1/debugdata/tgt.data')
     # exit(0)
 
     # >>> gt_instances
