@@ -255,11 +255,6 @@ class FCOS(nn.Module):
             scores *= scores_i_th_inds
             scores *= centerness[:, None]
             topk_cnt = scores_i_th_inds.reshape(-1).sum().clamp(max=self.nms_pre_topk)
-            # Fanchen: recover ltrb form, modified @ 0502
-            bbox_pred = torch.stack([points[:, 0] - bbox_pred[:, 0],
-                                     points[:, 1] - bbox_pred[:, 1],
-                                     points[:, 0] + bbox_pred[:, 2],
-                                     points[:, 1] + bbox_pred[:, 3]], dim=1)
 
             bbox_pred = torch.stack([points[:, 0] - bbox_pred[:, 0],
                                      points[:, 1] - bbox_pred[:, 1],
